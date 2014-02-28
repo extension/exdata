@@ -3,7 +3,7 @@
 # === LICENSE:
 # see LICENSE file
 require 'capistrano'
-require 'grit'
+require 'rugged'
 require 'rest-client'
 
 require 'capatross/logger'
@@ -12,8 +12,23 @@ require 'capatross/deep_merge' unless defined?(DeepMerge)
 require 'capatross/options'
 require 'capatross/git_utils'
 require 'capatross/core'
+require 'capatross/getdata'
 
 module Capatross
+
+  def self.settings
+    if(@settings.nil?)
+      @settings = Capatross::Options.new
+      @settings.load!
+    end
+
+    @settings
+  end
+
+  def self.has_capatross_key?
+    !settings.capatross_key.nil?
+  end
+
   def self.extended(configuration)
     configuration.load do
       set :capatross_core, Capatross::Core.new

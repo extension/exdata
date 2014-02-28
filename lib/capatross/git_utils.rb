@@ -3,7 +3,7 @@
 # Original (c) 2012 Jason Adam Young
 # === LICENSE:
 # see LICENSE file
-require 'grit'
+require 'rugged'
 
 module Capatross
   class GitUtils
@@ -20,28 +20,20 @@ module Capatross
     def localrepo
       if(@localrepo.nil?)
         begin
-          @localrepo = Grit::Repo.new(@path)
-        rescue Grit::InvalidGitRepositoryError
+          @localrepo = Rugged::Repository.new(@path)
+        rescue Rugged::RepositoryError
         end
       end
       @localrepo
     end
 
-    def gitconfig
-      @gitconfig ||= Grit::Config.new(localrepo)
-    end
-
     def user_name
-      @user_name ||= gitconfig.fetch('user.name')
+      @user_name ||= localrepo.config['user.name']
     end
 
     def user_email
-      @user_email ||= gitconfig.fetch('user.email')
+      @user_email ||= localrepo.config['user.email']
     end
 
   end
 end
-
-
-
-

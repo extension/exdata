@@ -1,8 +1,0 @@
-copy_log_to_server: true
-appkey: 'not_specified'
-albatross_uri: 'https://engineering.extension.org'
-albatross_deploy_path: '/deploys'
-getdata:
-  host: 'engineering.extension.org'
-  user: 'pacecar'
-  mysqlbin: '/Applications/MAMP/Library/bin/mysql'

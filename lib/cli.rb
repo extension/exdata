@@ -3,7 +3,6 @@
 # === LICENSE:
 # see LICENSE file
 require 'thor'
-require 'yaml'
 require 'json'
 require 'capatross/version'
 require 'capatross/options'
@@ -26,45 +25,14 @@ module Capatross
 
     no_tasks do
 
-      def load_rails(environment)
-        if !ENV["RAILS_ENV"] || ENV["RAILS_ENV"] == ""
-          ENV["RAILS_ENV"] = environment
-        end
-
-        # there are differences in the require semantics between Ruby 1.8 and Ruby 1.9
-        if(RUBY_VERSION =~ %r{1\.9})
-          loadrails = "./config/environment"
-        elsif(RUBY_VERSION =~ %r{1\.8})
-          loadrails = "config/environment"
-        else
-          puts "Unknown ruby version #{RUBY_VERSION}"
-          exit(1)
-        end
-
-        begin
-          require loadrails
-        rescue LoadError
-          puts 'capatross uses rails for certain features, it appears you are not at the root of a rails application, exiting...'
-          exit(1)
-        end
-      end
-
-      def getdata_key_check
-        if(settings.getdata.data_key.nil?)
-          puts "Please set your personal datakey in your capatross settings"
+      def capatross_key_check
+        if(!Capatross.has_capatross_key?)
+          puts "Please go to https://engineering.extension.org to obtain your capatross key and run 'capatross setup'"
           exit(1)
         end
       end
 
 
-      def drop_tables_rails(environment,dbsettings)
-        say "Dumping the tables from #{dbsettings['database']}... "
-        ActiveRecord::Base.establish_connection(environment)
-        ActiveRecord::Base.connection.tables.each do |table|
-          ActiveRecord::Base.connection.execute("DROP table #{table};")
-        end
-        say "done!"
-      end
 
       def drop_tables_mysql2(dbsettings)
         say "Dumping the tables from #{dbsettings['database']}... "
@@ -91,38 +59,6 @@ module Capatross
         './capatross_logs'
       end
 
-      def copy_configs
-        # campout.yml
-        destination = "./config/capatross.yml"
-        if(!File.exists?(destination))
-          copy_file('templates/capatross.yml',destination)
-        end
-      end
-
-      def add_local_to_gitignore
-        gitignore_file = './.gitignore'
-        if(File.exists?(gitignore_file))
-          # local configuration
-          if(!(File.read(gitignore_file) =~ %r{config/capatross.local.yml}))
-            append_file(gitignore_file,"\n# added by capatross generate_config\n/config/capatross.local.yml\n")
-          end
-
-          # deploylogs
-          if(!(File.read(gitignore_file) =~ %r{capatross_logs}))
-            append_file(gitignore_file,"\n# added by capatross generate_config\n/capatross_logs\n")
-          end
-
-        end
-      end
-
-      def add_capatross_to_deploy
-        cap_deploy_script = './config/deploy.rb'
-        if(File.exists?(cap_deploy_script))
-          if(!(File.read(cap_deploy_script) =~ %r{require ['|"]capatross["|']}))
-            prepend_file(cap_deploy_script,"\n# added by capatross generate_config\nrequire 'capatross'\n")
-          end
-        end
-      end
 
       def deploy_logs(dump_log_output=true)
         deploy_logs = []
@@ -139,12 +75,7 @@ module Capatross
       end
 
       def settings
-        if(@settings.nil?)
-          @settings = Capatross::Options.new
-          @settings.load!
-        end
-
-        @settings
+        Capatross.settings
       end
 
       def post_to_deploy_server(logdata)
@@ -159,37 +90,7 @@ module Capatross
         end
       end
 
-      def post_a_dump_request(request_options)
-        begin
-          result = RestClient.post("#{settings.albatross_uri}/dumps/do",
-                                   request_options.to_json,
-                                   :content_type => :json, :accept => :json)
-        rescue StandardError => e
-          result = e.response
-        end
-        JSON.parse(result)
-      end
 
-      def post_a_copy_request(request_options)
-        begin
-          result = RestClient.post("#{settings.albatross_uri}/dumps/copy",
-                                   request_options.to_json,
-                                   :content_type => :json, :accept => :json)
-        rescue StandardError => e
-          result = e.response
-        end
-        JSON.parse(result)
-      end
-
-      def get_dumpinfo(options = {})
-        request_params = options.map{|key,value| "#{key}=#{value}"}.join('&')
-        begin
-          result = RestClient.get("#{settings.albatross_uri}/dumps/dumpinfo?#{request_params}")
-        rescue StandardError => e
-          result = e.response
-        end
-        JSON.parse(result)
-      end
 
 
       def check_post_result(response)
@@ -250,12 +151,6 @@ module Capatross
       puts "Capatross Version #{Capatross::VERSION}: Post logs from a capistrano deploy to the deployment server, as well as a custom deploy-tracking application."
     end
 
-    desc "generate_config", "generate capatross configuration files"
-    def generate_config
-      copy_configs
-      add_local_to_gitignore
-      add_capatross_to_deploy
-    end
 
     desc "list", "list local deploys"
     def list
@@ -330,7 +225,7 @@ module Capatross
     def getdata
       is_rails_app = false
       getdata_key_check
-      
+
       # get the database settings
       if(options[:application] == 'this')
         application = 'this'
@@ -444,8 +339,8 @@ module Capatross
 
 
     desc "dumpinfo", "Get information about a database dump for an application"
-    method_option :application,:default => 'this', :aliases => "-a", :desc => "Application ('this' assumes you running at the root of a rails application)"
-    method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want to import"
+    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
+    method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     def dumpinfo
       getdata_key_check
       application = options[:application].downcase
@@ -457,6 +352,22 @@ module Capatross
       else
         dumpinfo_options['appname'] = application
       end
+
+      capatross_key_check
+      getdata = Capatross::GetData.new
+      application_list = getdata.known_applications
+      appname = options[:appname].downcase
+
+      # get the file details
+      if(appname == 'prompt')
+        appname = ask("What application?", limited_to: application_list)
+      elsif(!application_list.includes?(application))
+        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+        appname = ask("What application?", limited_to: application_list)
+      end
+
+      result = getdata.get_dumpinfo(appname,options[:dbtype])
+
 
       result = get_dumpinfo(dumpinfo_options)
       if(!result['success'])
@@ -483,20 +394,24 @@ module Capatross
 
 
     desc "dodump", "Request a database dump"
-    method_option :application,:default => 'this', :aliases => "-a", :desc => "Application ('this' assumes you running at the root of a rails application)"
+    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want to dump"
     def dodump
-      getdata_key_check
-      application = options[:application].downcase
+      capatross_key_check
+      getdata = Capatross::GetData.new
+      application_list = getdata.known_applications
+      appname = options[:appname].downcase
 
-      dodump_options = {'dbtype' => options[:dbtype], 'data_key' => settings.getdata.data_key}
-      if(application == 'this')
-        dodump_options['appkey'] = settings.appkey
-      else
-        dodump_options['appname'] = application
-      end      
+      # get the file details
+      if(appname == 'prompt')
+        appname = ask("What application?", limited_to: application_list)
+      elsif(!application_list.includes?(application))
+        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+        appname = ask("What application?", limited_to: application_list)
+      end
 
-      result = post_a_dump_request(dodump_options)
+      result = getdata.post_a_dump_request(appname,options[:dbtype])
+
       if(!result['success'])
         puts "Unable to request a #{options[:dbtype]} database dump for #{application}. Reason #{result['message'] || 'unknown'}"
       else
@@ -505,22 +420,25 @@ module Capatross
     end
 
     desc "docopy", "Request a database copy from production to development"
-    method_option :application,:default => 'this', :aliases => "-a", :desc => "Application ('this' assumes you running at the root of a rails application)"
+    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
     def docopy
-      getdata_key_check
-      application = options[:application].downcase
+      capatross_key_check
+      getdata = Capatross::GetData.new
+      application_list = getdata.known_applications
+      appname = options[:appname].downcase
 
       # get the file details
-      docopy_options = {'dbtype' => options[:dbtype], 'data_key' => settings.getdata.data_key}
-      if(application == 'this')
-        docopy_options['appkey'] = settings.appkey
-      else
-        docopy_options['appname'] = application
-      end      
+      if(appname == 'prompt')
+        appname = ask("What application?", limited_to: application_list)
+      elsif(!application_list.includes?(application))
+        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+        appname = ask("What application?", limited_to: application_list)
+      end
 
-      result = post_a_copy_request(docopy_options)
+      result = getdata.post_a_copy_request(appname)
+
       if(!result['success'])
-        puts "Unable to request a #{options[:dbtype]} database dump for #{application}. Reason #{result['message'] || 'unknown'}"
+        puts "Unable to request a database copy for #{appname}. Reason #{result['message'] || 'unknown'}"
       else
         puts "#{result['message'] || 'Unknown result'}"
       end
