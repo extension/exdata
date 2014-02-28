@@ -342,17 +342,6 @@ module Capatross
     method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     def dumpinfo
-      getdata_key_check
-      application = options[:application].downcase
-
-      # get the file details
-      dumpinfo_options = {'dbtype' => options[:dbtype], 'data_key' => settings.getdata.data_key}
-      if(application == 'this')
-        dumpinfo_options['appkey'] = settings.appkey
-      else
-        dumpinfo_options['appname'] = application
-      end
-
       capatross_key_check
       getdata = Capatross::GetData.new
       application_list = getdata.known_applications
@@ -368,16 +357,14 @@ module Capatross
 
       result = getdata.get_dumpinfo(appname,options[:dbtype])
 
-
-      result = get_dumpinfo(dumpinfo_options)
       if(!result['success'])
-        puts "Unable to get database dump information for #{application}."
+        puts "Unable to get database dump information for #{appname}."
         puts "Reason: #{result['message'] || 'unknown'}"
         exit(1)
       end
 
       if(!result['file'])
-        puts "Missing file in dump information for #{application}."
+        puts "Missing file in dump information for #{appname}."
         exit(1)
       end
 
