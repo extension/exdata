@@ -4,15 +4,7 @@
 # see LICENSE file
 require 'thor'
 require 'json'
-require 'capatross/version'
-require 'capatross/options'
-require 'capatross/deep_merge' unless defined?(DeepMerge)
-require 'capatross/git_utils'
-require 'rest-client'
-require 'net/scp'
-require 'mathn'
-require 'pp'
-require 'mysql2'
+require 'capatross'
 
 module Capatross
   class CLI < Thor
@@ -32,26 +24,32 @@ module Capatross
         end
       end
 
+      def get_database_name_for(application)
+        if(settings.getdata.dbsettings.nil?)
+          puts "Please set getdata.dbsettings in your capatross settings"
+          exit(1)
+        end
+
+        if(settings.getdata.applications.nil?)
+          puts "Please set getdata.applications['#{application}'] in your capatross settings"
+          exit(1)
+        end
+
+        dbname = settings.getdata.applications.send(application)
+        if(dbname.nil?)
+          puts "No databased specified in your capatross settings for #{application}"
+          exit(1)
+        end
+
+        dbname
+      end
+
+
 
 
       def drop_tables_mysql2(dbsettings)
         say "Dumping the tables from #{dbsettings['database']}... "
-        connection_settings = {}
-        dbsettings.each do |key,value|
-          if(key != 'database')
-            connection_settings[key.to_sym] = value
-          end
-        end
-        client = Mysql2::Client.new(connection_settings)
-        result = client.query("SHOW TABLES FROM #{dbsettings['database']}")
-        tables = []
-        result.each do |table_hash|
-          tables += table_hash.values
-        end
-        result = client.query("USE #{dbsettings['database']};")
-        tables.each do |table|
-          result = client.query("DROP table #{table};")
-        end
+
         say "done!"
       end
 
@@ -129,19 +127,7 @@ module Capatross
         }                # Use the block's return value as the method's
       end
 
-      # code from: https://github.com/ripienaar/mysql-dump-split
-      def humanize_bytes(bytes)
-        if(bytes != 0)
-          units = %w{B KB MB GB TB}
-          e = (Math.log(bytes)/Math.log(1024)).floor
-          s = "%.1f"%(bytes.to_f/1024**e)
-          s.sub(/\.?0*$/,units[e])
-        end
-      end
 
-      def percentify(number)
-        s = "%.0f\%"%(number*100)
-      end
 
     end
 
@@ -219,68 +205,36 @@ module Capatross
 
 
     desc "getdata", "Download and replace my local database with new data"
-    method_option :environment,:default => 'development', :aliases => "-e", :desc => "Rails environment if running a Rails application"
-    method_option :application,:default => 'this', :aliases => "-a", :desc => "Application ('this' assumes you running at the root of a rails application)"
-    method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want to import"
+    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
+    method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     def getdata
-      is_rails_app = false
-      getdata_key_check
+      capatross_key_check
+      getdata = Capatross::GetData.new
+      application_list = getdata.known_applications
+      appname = options[:appname].downcase
 
-      # get the database settings
-      if(options[:application] == 'this')
-        application = 'this'
-        load_rails(options[:environment])
-        is_rails_app = true
-        dbsettings = ActiveRecord::Base.configurations[options[:environment]]
-
-        if(settings.appkey.nil?)
-          puts "Please set appkey in your capatross settings"
-          exit(1)
-        end
-
-      else
-        application = options[:application].downcase
-
-        if(settings.getdata.dbsettings.nil?)
-          puts "Please set getdata.dbsettings in your capatross settings"
-          exit(1)
-        end
-
-        if(settings.getdata.applications.nil?)
-          puts "Please set getdata.applications['#{application}'] in your capatross settings"
-          exit(1)
-        end
-
-        dbname = settings.getdata.applications.send(application)
-        if(dbname.nil?)
-          puts "No databased specified in your capatross settings for #{application}"
-          exit(1)
-        end
-
-        dbsettings = {}
-        settings.getdata.dbsettings.to_hash.each do |key,value|
-          dbsettings[key.to_s] = value
-        end
-        dbsettings['database'] = dbname
+      # get the file details
+      if(appname == 'prompt')
+        appname = ask("What application?", limited_to: application_list)
+      elsif(!application_list.includes?(application))
+        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+        appname = ask("What application?", limited_to: application_list)
       end
+
+      # will exit if settings don't exist
+      database_name = get_database_name_for(appname)
 
 
       # get the file details
-      dumpinfo_options = {'dbtype' => options[:dbtype], 'data_key' => settings.getdata.data_key}
-      if(application == 'this')
-        dumpinfo_options['appkey'] = settings.appkey
-      else
-        dumpinfo_options['appname'] = application
-      end
+      result = getdata.get_dumpinfo(appname,options[:dbtype])
 
-      result = get_dumpinfo(dumpinfo_options)
       if(!result['success'])
-        puts "Unable to get database dump information for #{application}. Reason #{result['message'] || 'unknown'}"
+        puts "Unable to get database dump information for #{appname}. Reason #{result['message'] || 'unknown'}"
         exit(1)
       end
 
       if(!result['file'])
-        puts "Missing file in dump information for #{application}."
+        puts "Missing file in dump information for #{appname}."
         exit(1)
       end
 
@@ -296,7 +250,7 @@ module Capatross
       local_compressed_file = File.basename(remotefile)
       local_file = File.basename(local_compressed_file,'.gz')
 
-      say "Data dump for #{application} Size: #{humanize_bytes(result['size'])} Last dumped at: #{last_dumped_string}"
+      say "Data dump for #{application} Size: #{getdata.humanize_bytes(result['size'])} Last dumped at: #{last_dumped_string}"
       say "Starting download of #{remotefile} from #{settings.getdata.host}..."
       Net::SSH.start(settings.getdata.host, settings.getdata.user, :port => 24) do |ssh|
         print "Downloaded "
@@ -317,12 +271,7 @@ module Capatross
       run(gunzip_command, :verbose => false)
 
       # dump
-      if(is_rails_app)
-        drop_tables_rails(options[:environment],dbsettings)
-      else
-        drop_tables_mysql2(dbsettings)
-      end
-
+      getdata.drop_tables_for_database(database_name)
 
       # import
       say "Importing data into #{dbsettings['database']} (this might take a while)... "
@@ -334,7 +283,8 @@ module Capatross
 
     desc "showsettings", "Show settings"
     def showsettings
-      pp settings.to_hash
+      require 'pp'
+      pp Capatross.settings.to_hash
     end
 
 
