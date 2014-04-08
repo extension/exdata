@@ -3,8 +3,8 @@
 # === LICENSE:
 # see LICENSE file
 require 'thor'
-require 'json'
 require 'capatross'
+require 'highline'
 
 module Capatross
   class CLI < Thor
@@ -21,6 +21,12 @@ module Capatross
         if(!Capatross.has_capatross_key?)
           puts "Please go to https://engineering.extension.org to obtain your capatross key and run 'capatross setup'"
           exit(1)
+        end
+      end
+
+      def ask_password(message)
+        HighLine.new.ask(message) do |q|
+          q.echo = '*'
         end
       end
 
@@ -129,6 +135,40 @@ module Capatross
 
 
 
+    end
+
+    desc "setup", "Setup capatross on this host"
+    method_option :force, :aliases => '-f', :type => :boolean, :default => false, :desc => "Force an overwrite of any existing capatross settings"
+    def setup
+      # check for a ~/.capatross.yml and write a toml file from those settings
+      if (File.exists?(File.expand_path("~/.capatross.yml")) and !File.exists?(File.expand_path("~/capatross.toml")))
+        puts "Found " + File.expand_path("~/.capatross.yml") + " - converting to " + File.expand_path("~/capatross.toml")
+        require 'capatross/migrate_options'
+        migrate_settings = Capatross::MigrateOptions.new
+        migrate_settings.load!
+        @migrate_hash = migrate_settings.to_hash
+        # change data_key to capatross_key
+        if(@migrate_hash[:getdata][:data_key])
+          @migrate_hash[:capatross_key] = @migrate_hash[:getdata][:data_key]
+          @migrate_hash[:getdata].delete(:data_key)
+        end
+        toml_string = TOML::Generator.new(@migrate_hash).body
+        migrate_file = File.expand_path("~/capatross.toml")
+        File.open(migrate_file, 'w') {|f| f.write(toml_string) }
+        puts "Converted old configuration settings. You can now remove " + File.expand_path("~/.capatross.yml")
+        exit(0)
+      elsif(File.exists?(File.expand_path("~/capatross.toml")) and !options[:force])
+        puts "Your capatross configuration file (" + File.expand_path("~/capatross.toml") + ") already exists, use --force to overwrite"
+        exit(1)
+      else
+        config = {}
+        config[:capatross_key] = ask_password('Registration key: ')
+        toml_string = TOML::Generator.new(config).body
+        migrate_file = File.expand_path("~/capatross.toml")
+        File.open(migrate_file, 'w') {|f| f.write(toml_string) }
+        puts "Wrote configuration key to " + File.expand_path("~/capatross.toml")
+      end
+      # todo check key?
     end
 
 
@@ -380,6 +420,8 @@ module Capatross
         puts "#{result['message'] || 'Unknown result'}"
       end
     end
+
+
 
 
 
