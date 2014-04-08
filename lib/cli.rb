@@ -30,20 +30,20 @@ module Capatross
         end
       end
 
-      def get_database_name_for(application)
+      def check_database_name_for(appname)
         if(settings.getdata.dbsettings.nil?)
           puts "Please set getdata.dbsettings in your capatross settings"
           exit(1)
         end
 
         if(settings.getdata.applications.nil?)
-          puts "Please set getdata.applications['#{application}'] in your capatross settings"
+          puts "Please set getdata.applications['#{appname}'] in your capatross settings"
           exit(1)
         end
 
-        dbname = settings.getdata.applications.send(application)
+        dbname = settings.getdata.applications.send(appname)
         if(dbname.nil?)
-          puts "No databased specified in your capatross settings for #{application}"
+          puts "No databased specified in your capatross settings for #{appname}"
           exit(1)
         end
 
@@ -113,27 +113,6 @@ module Capatross
           end
         end
       end
-
-      # from:
-      # http://stackoverflow.com/questions/10262235/printing-an-ascii-spinning-cursor-in-the-console
-      def show_wait_spinner(fps=10)
-        chars = %w[| / - \\]
-        delay = 1.0/fps
-        iter = 0
-        spinner = Thread.new do
-          while iter do  # Keep spinning until told otherwise
-            print chars[(iter+=1) % chars.length]
-            sleep delay
-            print "\b"
-          end
-        end
-        yield.tap{       # After yielding to the block, save the return value
-          iter = false   # Tell the thread to exit, cleaning up after itself…
-          spinner.join   # …and wait for it to do so.
-        }                # Use the block's return value as the method's
-      end
-
-
 
     end
 
@@ -245,80 +224,52 @@ module Capatross
 
 
     desc "getdata", "Download and replace my local database with new data"
-    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
+    method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     def getdata
       capatross_key_check
-      getdata = Capatross::GetData.new
-      application_list = getdata.known_applications
+      application_list = Capatross::GetData.known_applications
       appname = options[:appname].downcase
 
       # get the file details
       if(appname == 'prompt')
         appname = ask("What application?", limited_to: application_list)
-      elsif(!application_list.includes?(application))
-        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+      elsif(!application_list.include?(appname))
+        say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
       end
 
       # will exit if settings don't exist
-      database_name = get_database_name_for(appname)
+      check_database_name_for(appname)
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
 
-
-      # get the file details
-      result = getdata.get_dumpinfo(appname,options[:dbtype])
-
-      if(!result['success'])
-        puts "Unable to get database dump information for #{appname}. Reason #{result['message'] || 'unknown'}"
+      # error handling
+      if(!getdata.dumpinfo['success'])
+        puts "Unable to get database dump information for #{appname}. Reason #{getdata.dumpinfo['message'] || 'unknown'}"
         exit(1)
       end
 
-      if(!result['file'])
+      if(!getdata.remotefile)
         puts "Missing file in dump information for #{appname}."
         exit(1)
       end
 
-      begin
-        last_dumped_at = Time.parse(result['last_dumped_at'])
-        last_dumped_string = last_dumped_at.localtime.strftime("%Y/%m/%d %H:%M %Z")
-      rescue
-        last_dumped_string = 'unknown'
-      end
+      say "Data dump for #{appname} Size: #{getdata.humanize_size} Last dumped at: #{getdata.last_dumped}"
+      say "Starting download of #{getdata.remotefile} from #{getdata.remotehost}..."
+      getdata.download_remotefile # outputs progress
 
-
-      remotefile = result['file']
-      local_compressed_file = File.basename(remotefile)
-      local_file = File.basename(local_compressed_file,'.gz')
-
-      say "Data dump for #{application} Size: #{getdata.humanize_bytes(result['size'])} Last dumped at: #{last_dumped_string}"
-      say "Starting download of #{remotefile} from #{settings.getdata.host}..."
-      Net::SSH.start(settings.getdata.host, settings.getdata.user, :port => 24) do |ssh|
-        print "Downloaded "
-        ssh.scp.download!(remotefile,"/tmp/#{local_compressed_file}") do |ch, name, sent, total|
-          print "\r"
-          print "Downloaded "
-          print "#{percentify(sent/total)} #{humanize_bytes(sent)} of #{humanize_bytes(total)}"
-        end
-        puts " ...done!"
-      end
-
-      gunzip_command = "gunzip --force /tmp/#{local_compressed_file}"
-      pv_command = '/usr/local/bin/pv'
-      db_import_command = "#{settings.getdata.mysqlbin} --default-character-set=utf8 -u#{dbsettings['username']} -p#{dbsettings['password']} #{dbsettings['database']} < /tmp/#{local_file}"
 
       # gunzip
-      say "Unzipping /tmp/#{local_compressed_file}..."
-      run(gunzip_command, :verbose => false)
+      say "Unzipping #{getdata.localfile_compressed}..."
+      getdata.gunzip_localfile
 
-      # dump
-      getdata.drop_tables_for_database(database_name)
+      # drop the tables
+      say "Dropping the database tables for #{getdata.database_name}"
+      getdata.drop_tables_for_database
 
       # import
       say "Importing data into #{dbsettings['database']} (this might take a while)... "
-      show_wait_spinner {
-        run(db_import_command, :verbose => false)
-      }
-      puts " done!"
+      getdata.import_localfile_to_database
     end
 
     desc "showsettings", "Show settings"
