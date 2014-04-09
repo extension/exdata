@@ -223,10 +223,11 @@ module Capatross
     end
 
 
-    desc "getdata", "Download and replace my local database with new data"
+    desc "downloaddata", "Download data snapshots from the server for the specified application"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
-    def getdata
+    method_option :localfile,:default => 'default', :aliases => "-f", :desc => "Full path and name of the file you want to download to (defaults to a file in /tmp)"
+    def downloaddata
       capatross_key_check
       application_list = Capatross::GetData.known_applications
       appname = options[:appname].downcase
@@ -241,7 +242,44 @@ module Capatross
 
       # will exit if settings don't exist
       check_database_name_for(appname)
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+
+      # error handling
+      if(!getdata.dumpinfo['success'])
+        puts "Unable to get database dump information for #{appname}. Reason #{getdata.dumpinfo['message'] || 'unknown'}"
+        exit(1)
+      end
+
+      if(!getdata.remotefile)
+        puts "Missing file in dump information for #{appname}."
+        exit(1)
+      end
+
+      say "Data dump for #{appname} Size: #{getdata.humanize_size} Last dumped at: #{getdata.last_dumped}"
+      say "Starting download of #{getdata.remotefile} from #{getdata.remotehost} and saving to #{getdata.localfile_downloaded}..."
+      getdata.download_remotefile # outputs progress
+    end
+
+    desc "getdata", "Downloads and imports a data snapshot for the specified application"
+    method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
+    method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
+    method_option :localfile,:default => 'default', :aliases => "-f", :desc => "Full path and name of the file you want to download to (defaults to a file in /tmp)"
+    def getdata
+      capatross_key_check
+      application_list = Capatross::GetData.known_applications
+      appname = options[:appname].downcase
+
+      # get the file details
+      if(appname == 'prompt')
+        appname = ask("What application?", limited_to: application_list)
+      elsif(!application_list.include?(appname))
+        say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+        appname = ask("What application?", limited_to: application_list)
+      end
+
+      # will exit if settings don't exist
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+
 
       # error handling
       if(!getdata.dumpinfo['success'])
@@ -260,7 +298,7 @@ module Capatross
 
 
       # gunzip
-      say "Unzipping #{getdata.localfile_compressed}..."
+      say "Decompressing #{getdata.localfile_downloaded}..."
       getdata.gunzip_localfile
 
       # drop the tables
@@ -268,9 +306,52 @@ module Capatross
       getdata.drop_tables_for_database
 
       # import
-      say "Importing data into #{dbsettings['database']} (this might take a while)... "
+      say "Importing data into #{getdata.database_name} (this might take a while)... "
+      getdata.import_localfile_to_database
+
+    end
+
+    desc "importdata", "Imports a data snapshot for the specified application if the file exists"
+    method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
+    method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
+    method_option :localfile,:default => 'default', :aliases => "-f", :desc => "Full path and name of the file you want to download to (defaults to a file in /tmp)"
+    def importdata
+      capatross_key_check
+      application_list = Capatross::GetData.known_applications
+      appname = options[:appname].downcase
+
+      # get the file details
+      if(appname == 'prompt')
+        appname = ask("What application?", limited_to: application_list)
+      elsif(!application_list.include?(appname))
+        say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+        appname = ask("What application?", limited_to: application_list)
+      end
+
+      # will exit if settings don't exist
+      check_database_name_for(appname)
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+
+      if(File.exists?(getdata.localfile_downloaded))
+        # gunzip
+        say "Decompressing #{getdata.localfile_downloaded}..."
+        getdata.gunzip_localfile
+      end
+
+      if(!File.exists?(getdata.localfile))
+        say "The specified data import file: #{getdata.localfile} does not exist. Run capatross getdata or capatross downloaddata to download the file"
+        exit(1)
+      end
+
+      # drop the tables
+      say "Dropping the database tables for #{getdata.database_name}"
+      getdata.drop_tables_for_database
+
+      # import
+      say "Importing data into #{getdata.database_name} (this might take a while)... "
       getdata.import_localfile_to_database
     end
+
 
     desc "showsettings", "Show settings"
     def showsettings

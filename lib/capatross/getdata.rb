@@ -5,6 +5,7 @@
 require 'json'
 require 'rest-client'
 require 'mysql2'
+require 'open3'
 
 module Capatross
 
@@ -25,11 +26,8 @@ module Capatross
         raise GetDataError, "invalid application name #{appname}"
       end
 
-      if(options[:dbtype])
-        @dbtype = options[:dbtype]
-      else
-        @dbtype = 'production'
-      end
+      @dbtype = (options[:dbtype].nil? ? 'production' : options[:dbtype])
+      @localfile = options[:localfile] if (!options[:localfile].nil? and options[:localfile] != 'default')
     end
 
     def run_command(command,debug = false)
@@ -47,7 +45,6 @@ module Capatross
       $stderr = real_stderr
     end
 
-
     def dumpinfo
       if(!@dumpinfo)
         @dumpinfo = get_dumpinfo
@@ -57,7 +54,7 @@ module Capatross
 
     def last_dumped
       begin
-        last_dumped_at = Time.parse(result['last_dumped_at'])
+        last_dumped_at = Time.parse(dumpinfo['last_dumped_at'])
         last_dumped_at.localtime.strftime("%Y/%m/%d %H:%M %Z")
       rescue
         'unknown'
@@ -65,16 +62,21 @@ module Capatross
     end
 
     def remotefile
+      # remotefile is expected to be a gzip-compressed file ending in .gz
       self.dumpinfo['file']
     end
 
-    def localfile_compressed
-      "/tmp/" + File.basename(remotefile)
+    def localfile
+      if(!@localfile)
+        @localfile = "/tmp/" + File.basename(remotefile,'.gz') + "_#{self.dbtype}"
+      end
+      @localfile
     end
 
-    def localfile
-      "/tmp/" + File.basename(self.local_compressed_file,'.gz')
+    def localfile_downloaded
+      self.localfile + ".gz"
     end
+
 
     def remotehost
       Capatross.settings.getdata.host
@@ -85,7 +87,7 @@ module Capatross
     end
 
     def gunzip_command
-     "gunzip --force #{self.localfile_compressed}"
+     "gunzip --force #{self.localfile_downloaded}"
     end
 
     def db_import_command
@@ -106,7 +108,7 @@ module Capatross
     def download_remotefile(print_progress = true)
       Net::SSH.start(Capatross.settings.getdata.host, Capatross.settings.getdata.user, :port => 24) do |ssh|
         print "Downloaded " if print_progress
-        ssh.scp.download!(remotefile,localfile_compressed) do |ch, name, sent, total|
+        ssh.scp.download!(remotefile,localfile_downloaded) do |ch, name, sent, total|
           print "\r" if print_progress
           print "Downloaded " if print_progress
           print "#{self.percentify(sent/total.to_f)} #{self.humanize_bytes(sent)} of #{self.humanize_bytes(total)}" if print_progress
