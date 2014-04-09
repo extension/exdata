@@ -361,65 +361,59 @@ module Capatross
 
 
     desc "dumpinfo", "Get information about a database dump for an application"
-    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
+    method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     def dumpinfo
       capatross_key_check
-      getdata = Capatross::GetData.new
-      application_list = getdata.known_applications
+      application_list = Capatross::GetData.known_applications
       appname = options[:appname].downcase
 
       # get the file details
       if(appname == 'prompt')
         appname = ask("What application?", limited_to: application_list)
-      elsif(!application_list.includes?(application))
-        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+      elsif(!application_list.include?(appname))
+        say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
       end
 
-      result = getdata.get_dumpinfo(appname,options[:dbtype])
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
 
-      if(!result['success'])
-        puts "Unable to get database dump information for #{appname}."
-        puts "Reason: #{result['message'] || 'unknown'}"
+
+      # error handling
+      if(!getdata.dumpinfo['success'])
+        puts "Unable to get database dump information for #{appname}. Reason #{getdata.dumpinfo['message'] || 'unknown'}"
         exit(1)
       end
 
-      if(!result['file'])
+      if(!getdata.remotefile)
         puts "Missing file in dump information for #{appname}."
         exit(1)
       end
 
-      begin
-        last_dumped_at = Time.parse(result['last_dumped_at'])
-        last_dumped_string = last_dumped_at.strftime("%A, %B %e, %Y, %l:%M %p %Z")
-      rescue
-        last_dumped_string = 'unknown'
-      end
-
-      pp result.to_hash
+      require 'pp'
+      pp getdata.dumpinfo.to_hash
 
     end
 
 
     desc "dodump", "Request a database dump"
-    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
+    method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want to dump"
     def dodump
       capatross_key_check
-      getdata = Capatross::GetData.new
-      application_list = getdata.known_applications
+      application_list = Capatross::GetData.known_applications
       appname = options[:appname].downcase
 
       # get the file details
       if(appname == 'prompt')
         appname = ask("What application?", limited_to: application_list)
-      elsif(!application_list.includes?(application))
-        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+      elsif(!application_list.include?(appname))
+        say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
       end
 
-      result = getdata.post_a_dump_request(appname,options[:dbtype])
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
+      result = getdata.post_a_dump_request
 
       if(!result['success'])
         puts "Unable to request a #{options[:dbtype]} database dump for #{application}. Reason #{result['message'] || 'unknown'}"
@@ -429,22 +423,23 @@ module Capatross
     end
 
     desc "docopy", "Request a database copy from production to development"
-    method_option :appname, :default => 'prompt', :aliases => "-a", :desc => "Application name"
+    method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     def docopy
       capatross_key_check
-      getdata = Capatross::GetData.new
-      application_list = getdata.known_applications
+      application_list = Capatross::GetData.known_applications
       appname = options[:appname].downcase
 
       # get the file details
       if(appname == 'prompt')
         appname = ask("What application?", limited_to: application_list)
-      elsif(!application_list.includes?(application))
-        say("#{application} is not a configured application. Configured applications are: #{application_list.join(', ')}")
+      elsif(!application_list.include?(appname))
+        say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
       end
 
-      result = getdata.post_a_copy_request(appname)
+      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
+      
+      result = getdata.post_a_copy_request
 
       if(!result['success'])
         puts "Unable to request a database copy for #{appname}. Reason #{result['message'] || 'unknown'}"
@@ -452,15 +447,6 @@ module Capatross
         puts "#{result['message'] || 'Unknown result'}"
       end
     end
-
-
-
-
-
-    # desc "prune", "prune old deploy logs"
-    # def prune
-    # TODO
-    # end
 
   end
 
