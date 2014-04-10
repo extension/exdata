@@ -51,14 +51,6 @@ module Capatross
       end
 
 
-
-
-      def drop_tables_mysql2(dbsettings)
-        say "Dumping the tables from #{dbsettings['database']}... "
-
-        say "done!"
-      end
-
       def logsdir
         './capatross_logs'
       end
