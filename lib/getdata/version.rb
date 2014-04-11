@@ -1,3 +1,3 @@
-module Capatross
+module GetData
   VERSION = "2.0.0"
 end

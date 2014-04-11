@@ -8,12 +8,12 @@
 # see LICENSE file
 
 require 'ostruct'
-require 'yaml'
+require 'toml'
 require 'erb'
 
-module Capatross
+module GetData
   module Sources
-    class YAMLSource
+    class TOMLSource
 
       attr_accessor :path
 
@@ -24,7 +24,7 @@ module Capatross
       # returns a config hash from the YML file
       def load
         if @path and File.exists?(@path.to_s)
-          result = YAML.load(IO.read(@path.to_s))
+          result = TOML.load(IO.read(@path.to_s))
         end
         result || {}
       end
@@ -32,7 +32,7 @@ module Capatross
     end
   end
 
-  class MigrateOptions < OpenStruct
+  class Options < OpenStruct
     attr_accessor :defaults
 
     def files=(*files)
@@ -43,7 +43,7 @@ module Capatross
 
     def files
       if(@files.nil? or @files.empty?)
-        @files = [File.expand_path("~/.capatross.yml")]
+        @files = ["#{File.join(File.dirname(__FILE__), "defaults.toml").to_s}",File.expand_path("~/getdata.toml")]
       end
       @files
     end
@@ -64,7 +64,7 @@ module Capatross
 
     def reset_sources!
       self.files.each do |file|
-        source = (Sources::YAMLSource.new(file)) if file.is_a?(String)
+        source = (Sources::TOMLSource.new(file)) if file.is_a?(String)
         @config_sources ||= []
         @config_sources << source
       end
@@ -95,7 +95,7 @@ module Capatross
     def to_hash
       result = {}
       marshal_dump.each do |k, v|
-        result[k] = v.instance_of?(Capatross::MigrateOptions) ? v.to_hash : v
+        result[k] = v.instance_of?(GetData::Options) ? v.to_hash : v
       end
       result
     end

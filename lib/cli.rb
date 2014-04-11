@@ -3,10 +3,10 @@
 # === LICENSE:
 # see LICENSE file
 require 'thor'
-require 'capatross'
+require 'getdata'
 require 'highline'
 
-module Capatross
+module GetData
   class CLI < Thor
     include Thor::Actions
 
@@ -17,9 +17,9 @@ module Capatross
 
     no_tasks do
 
-      def capatross_key_check
-        if(!Capatross.has_capatross_key?)
-          puts "Please go to https://engineering.extension.org to obtain your capatross key and run 'capatross setup'"
+      def getdata_key_check
+        if(!GetData.has_getdata_key?)
+          puts "Please go to https://engineering.extension.org to obtain your getdata key and run 'getdata setup'"
           exit(1)
         end
       end
@@ -31,197 +31,74 @@ module Capatross
       end
 
       def check_database_name_for(appname)
-        if(settings.getdata.dbsettings.nil?)
-          puts "Please set getdata.dbsettings in your capatross settings"
+        if(GetData.settings.dbsettings.nil?)
+          puts "Please set dbsettings in your getdata settings"
           exit(1)
         end
 
-        if(settings.getdata.applications.nil?)
-          puts "Please set getdata.applications['#{appname}'] in your capatross settings"
+        if(GetData.settings.applications.nil?)
+          puts "Please set applications['#{appname}'] in your getdata settings"
           exit(1)
         end
 
-        dbname = settings.getdata.applications.send(appname)
+        dbname = GetData.settings.applications.send(appname)
         if(dbname.nil?)
-          puts "No databased specified in your capatross settings for #{appname}"
+          puts "No databased specified in your getdata settings for #{appname}"
           exit(1)
         end
 
         dbname
       end
 
-
-      def logsdir
-        './capatross_logs'
-      end
-
-
-      def deploy_logs(dump_log_output=true)
-        deploy_logs = []
-        # loop through the files
-        Dir.glob(File.join(logsdir,'*.json')).sort.each do |logfile|
-          logdata = JSON.parse(File.read(logfile))
-          if(dump_log_output)
-            logdata.delete('deploy_log')
-          end
-          deploy_logs << logdata
-        end
-
-        deploy_logs
-      end
-
-      def settings
-        Capatross.settings
-      end
-
-      def post_to_deploy_server(logdata)
-        # indicate that this is coming from the cli
-        logdata['from_cli'] = true
-        begin
-          RestClient.post("#{settings.albatross_uri}#{settings.albatross_deploy_path}",
-                          logdata.to_json,
-                          :content_type => :json, :accept => :json)
-        rescue=> e
-          e.response
-        end
-      end
-
-
-
-
-      def check_post_result(response)
-        if(!response.code == 200)
-          return false
-        else
-          begin
-            parsed_response = JSON.parse(response)
-            if(parsed_response['success'])
-              return true
-            else
-              return false
-            end
-          rescue
-            return false
-          end
-        end
-      end
-
     end
 
-    desc "setup", "Setup capatross on this host"
-    method_option :force, :aliases => '-f', :type => :boolean, :default => false, :desc => "Force an overwrite of any existing capatross settings"
+    desc "setup", "Setup getdata on this host"
+    method_option :force, :aliases => '-f', :type => :boolean, :default => false, :desc => "Force an overwrite of any existing getdata settings"
     def setup
       # check for a ~/.capatross.yml and write a toml file from those settings
-      if (File.exists?(File.expand_path("~/.capatross.yml")) and !File.exists?(File.expand_path("~/capatross.toml")))
-        puts "Found " + File.expand_path("~/.capatross.yml") + " - converting to " + File.expand_path("~/capatross.toml")
-        require 'capatross/migrate_options'
-        migrate_settings = Capatross::MigrateOptions.new
+      if (File.exists?(File.expand_path("~/.capatross.yml")) and !File.exists?(File.expand_path("~/getdata.toml")))
+        puts "Found " + File.expand_path("~/.capatross.yml") + " - converting to " + File.expand_path("~/getdata.toml")
+        require 'getdata/migrate_options'
+        migrate_settings = GetData::MigrateOptions.new
         migrate_settings.load!
-        @migrate_hash = migrate_settings.to_hash
-        # change data_key to capatross_key
-        if(@migrate_hash[:getdata][:data_key])
-          @migrate_hash[:capatross_key] = @migrate_hash[:getdata][:data_key]
-          @migrate_hash[:getdata].delete(:data_key)
+        @migrate_hash = migrate_settings.getdata.to_hash
+        # change data_key to getdata_key
+        if(@migrate_hash[:data_key])
+          @migrate_hash[:getdata_key] = @migrate_hash[:data_key]
+          @migrate_hash.delete(:data_key)
         end
         toml_string = TOML::Generator.new(@migrate_hash).body
-        migrate_file = File.expand_path("~/capatross.toml")
+        migrate_file = File.expand_path("~/getdata.toml")
         File.open(migrate_file, 'w') {|f| f.write(toml_string) }
         puts "Converted old configuration settings. You can now remove " + File.expand_path("~/.capatross.yml")
         exit(0)
-      elsif(File.exists?(File.expand_path("~/capatross.toml")) and !options[:force])
-        puts "Your capatross configuration file (" + File.expand_path("~/capatross.toml") + ") already exists, use --force to overwrite"
+      elsif(File.exists?(File.expand_path("~/getdata.toml")) and !options[:force])
+        puts "Your getdata configuration file (" + File.expand_path("~/getdata.toml") + ") already exists, use --force to overwrite"
         exit(1)
       else
         config = {}
-        config[:capatross_key] = ask_password('Registration key: ')
+        config[:getdata_key] = ask_password('Registration key: ')
         toml_string = TOML::Generator.new(config).body
-        migrate_file = File.expand_path("~/capatross.toml")
+        migrate_file = File.expand_path("~/getdata.toml")
         File.open(migrate_file, 'w') {|f| f.write(toml_string) }
-        puts "Wrote configuration key to " + File.expand_path("~/capatross.toml")
+        puts "Wrote configuration key to " + File.expand_path("~/getdata.toml")
       end
       # todo check key?
     end
 
 
-    desc "about", "about capatross"
+    desc "about", "about getdata"
     def about
-      puts "Capatross Version #{Capatross::VERSION}: Post logs from a capistrano deploy to the deployment server, as well as a custom deploy-tracking application."
+      puts "eXData Version #{GetData::VERSION}: Utility to download data snapshots and import them locally for development"
     end
 
-
-    desc "list", "list local deploys"
-    def list
-      if(!File.exists?(logsdir))
-         say("Error: Capatross log directory (#{logsdir}) not present", :red)
-      end
-
-      deploy_logs.sort_by{|log| log['start']}.each do |log|
-        if(log['success'])
-          message = "#{log['capatross_id']} : Revision: #{log['deployed_revision']} deployed at #{log['start'].to_s} to #{log['location']}"
-        else
-          message = "#{log['capatross_id']} : Deploy failed at #{log['start'].to_s} to #{log['location']}"
-        end
-
-        if(log['finish_posted'])
-          message += ' (posted)'
-          say(message)
-        else
-          message += ' (not posted)'
-          say(message,:yellow)
-        end
-      end
-    end
-
-    desc "post", "post or repost the logdata from the specified local deploy"
-    method_option :log, :aliases => '-l', :type => :string, :required => true, :desc => "The capatross deploy id to post/repost (use 'list' to show known deploys)"
-    def post
-      logfile = "./capatross_logs/#{options[:log]}.json"
-      if(!File.exists?(logfile))
-         say("Error: The specified capatross log (#{options[:log]}) was not found", :red)
-      end
-      logdata = JSON.parse(File.read(logfile))
-
-      result = post_to_deploy_server(logdata)
-      if(check_post_result(result))
-        say("Log data posted to #{settings.albatross_uri}#{settings.albatross_deploy_path}")
-        # update that we posted
-        logdata['finish_posted'] = true
-        File.open(logfile, 'w') {|f| f.write(logdata.to_json) }
-      else
-        say("Unable to post log data to #{settings.albatross_uri}#{settings.albatross_deploy_path} (Code: #{result.response.code })",:red)
-      end
-    end
-
-    desc "sync", "post all unposted deploys"
-    def sync
-      if(!File.exists?(logsdir))
-         say("Error: Capatross log directory (#{logsdir}) not present", :red)
-      end
-
-      deploy_logs(false).each do |log|
-        if(!log['finish_posted'])
-          result = post_to_deploy_server(log)
-          if(check_post_result(result))
-            say("#{log['capatross_id']} data posted to #{settings.albatross_uri}#{settings.albatross_deploy_path}")
-            # update that we posted
-            log['finish_posted'] = true
-            logfile = File.join(logsdir,"#{log['capatross_id']}.json")
-            File.open(logfile, 'w') {|f| f.write(log.to_json) }
-          else
-            say("Unable to post #{log['capatross_id']} data to #{settings.albatross_uri}#{settings.albatross_deploy_path} (Code: #{result.response.code })",:red)
-          end
-        end
-      end
-    end
-
-
-    desc "downloaddata", "Download data snapshots from the server for the specified application"
+    desc "fetch", "Download data snapshots from the server for the specified application"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     method_option :localfile,:default => 'default', :aliases => "-f", :desc => "Full path and name of the file you want to download to (defaults to a file in /tmp)"
-    def downloaddata
-      capatross_key_check
-      application_list = Capatross::GetData.known_applications
+    def fetch
+      getdata_key_check
+      application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
 
       # get the file details
@@ -234,7 +111,7 @@ module Capatross
 
       # will exit if settings don't exist
       check_database_name_for(appname)
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+      getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
 
       # error handling
       if(!getdata.dumpinfo['success'])
@@ -252,13 +129,13 @@ module Capatross
       getdata.download_remotefile # outputs progress
     end
 
-    desc "getdata", "Downloads and imports a data snapshot for the specified application"
+    desc "pull", "Downloads and imports a data snapshot for the specified application"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     method_option :localfile,:default => 'default', :aliases => "-f", :desc => "Full path and name of the file you want to download to (defaults to a file in /tmp)"
-    def getdata
-      capatross_key_check
-      application_list = Capatross::GetData.known_applications
+    def pull
+      getdata_key_check
+      application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
 
       # get the file details
@@ -270,7 +147,7 @@ module Capatross
       end
 
       # will exit if settings don't exist
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+      getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
 
 
       # error handling
@@ -303,13 +180,13 @@ module Capatross
 
     end
 
-    desc "importdata", "Imports a data snapshot for the specified application if the file exists"
+    desc "import", "Imports a data snapshot for the specified application if the file exists"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
     method_option :localfile,:default => 'default', :aliases => "-f", :desc => "Full path and name of the file you want to download to (defaults to a file in /tmp)"
-    def importdata
-      capatross_key_check
-      application_list = Capatross::GetData.known_applications
+    def import
+      getdata_key_check
+      application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
 
       # get the file details
@@ -322,7 +199,7 @@ module Capatross
 
       # will exit if settings don't exist
       check_database_name_for(appname)
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+      getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
 
       if(File.exists?(getdata.localfile_downloaded))
         # gunzip
@@ -331,7 +208,7 @@ module Capatross
       end
 
       if(!File.exists?(getdata.localfile))
-        say "The specified data import file: #{getdata.localfile} does not exist. Run capatross getdata or capatross downloaddata to download the file"
+        say "The specified data import file: #{getdata.localfile} does not exist. Run getdata getdata or getdata downloaddata to download the file"
         exit(1)
       end
 
@@ -348,16 +225,16 @@ module Capatross
     desc "showsettings", "Show settings"
     def showsettings
       require 'pp'
-      pp Capatross.settings.to_hash
+      pp GetData.settings.to_hash
     end
 
 
     desc "dumpinfo", "Get information about a database dump for an application"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
-    def dumpinfo
-      capatross_key_check
-      application_list = Capatross::GetData.known_applications
+    def info
+      getdata_key_check
+      application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
 
       # get the file details
@@ -368,7 +245,7 @@ module Capatross
         appname = ask("What application?", limited_to: application_list)
       end
 
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
+      getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype]})
 
 
       # error handling
@@ -388,12 +265,12 @@ module Capatross
     end
 
 
-    desc "dodump", "Request a database dump"
+    desc "dump", "Request a database dump"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want to dump"
-    def dodump
-      capatross_key_check
-      application_list = Capatross::GetData.known_applications
+    def dump
+      getdata_key_check
+      application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
 
       # get the file details
@@ -404,7 +281,7 @@ module Capatross
         appname = ask("What application?", limited_to: application_list)
       end
 
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
+      getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype]})
       result = getdata.post_a_dump_request
 
       if(!result['success'])
@@ -414,11 +291,11 @@ module Capatross
       end
     end
 
-    desc "docopy", "Request a database copy from production to development"
+    desc "devcopy", "Request a database copy from production to development"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
-    def docopy
-      capatross_key_check
-      application_list = Capatross::GetData.known_applications
+    def devcopy
+      getdata_key_check
+      application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
 
       # get the file details
@@ -429,7 +306,7 @@ module Capatross
         appname = ask("What application?", limited_to: application_list)
       end
 
-      getdata = Capatross::GetData.new({appname: appname, dbtype: options[:dbtype]})
+      getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype]})
       
       result = getdata.post_a_copy_request
 

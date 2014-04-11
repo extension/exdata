@@ -6,17 +6,19 @@ require 'json'
 require 'rest-client'
 require 'mysql2'
 require 'open3'
+require 'net/ssh'
+require 'net/scp'
 
-module Capatross
+module GetData
 
   class GetDataError < StandardError; end
 
-  class GetData
+  class Core
 
     attr_reader :appname, :dbtype
 
     def self.known_applications
-      Capatross.settings.getdata.applications.to_hash.keys.map{|appname| appname.to_s}
+      GetData.settings.applications.to_hash.keys.map{|appname| appname.to_s}
     end
 
     def initialize(options)
@@ -79,7 +81,7 @@ module Capatross
 
 
     def remotehost
-      Capatross.settings.getdata.host
+      GetData.settings.host
     end
 
     def humanize_size
@@ -92,7 +94,7 @@ module Capatross
 
     def db_import_command
       base_command_array = []
-      base_command_array << "#{Capatross.settings.getdata.mysqlbin}"
+      base_command_array << "#{GetData.settings.mysqlbin}"
       base_command_array << "--default-character-set=utf8"
       base_command_array << "--user=#{self.dbsettings['username']}"
       base_command_array << "--password=#{self.dbsettings['password']}"
@@ -106,7 +108,7 @@ module Capatross
     end
 
     def download_remotefile(print_progress = true)
-      Net::SSH.start(Capatross.settings.getdata.host, Capatross.settings.getdata.user, :port => 24) do |ssh|
+      Net::SSH.start(GetData.settings.host, GetData.settings.user, :port => 24) do |ssh|
         print "Downloaded " if print_progress
         ssh.scp.download!(remotefile,localfile_downloaded) do |ch, name, sent, total|
           print "\r" if print_progress
@@ -118,13 +120,13 @@ module Capatross
     end
 
     def database_name
-      Capatross.settings.getdata.applications.send(appname)
+      GetData.settings.applications.send(appname)
     end
 
     def dbsettings
       if(!@dbsettings)
         @dbsettings = {}
-        Capatross.settings.getdata.dbsettings.to_hash.each do |key,value|
+        GetData.settings.dbsettings.to_hash.each do |key,value|
           @dbsettings[key.to_s] = value
         end        
 
@@ -169,10 +171,10 @@ module Capatross
 
 
     def post_a_copy_request
-      request_options = {appname: self.appname, data_key: Capatross.settings.capatross_key}
+      request_options = {appname: self.appname, data_key: GetData.settings.getdata_key}
 
       begin
-        result = RestClient.post("#{Capatross.settings.albatross_uri}/dumps/copy",
+        result = RestClient.post("#{GetData.settings.albatross_uri}/dumps/copy",
                                  request_options.to_json,
                                  :content_type => :json, :accept => :json)
       rescue StandardError => e
@@ -182,10 +184,10 @@ module Capatross
     end
 
     def post_a_dump_request
-      request_options = {appname: self.appname, dbtype: self.dbtype, data_key: Capatross.settings.capatross_key}
+      request_options = {appname: self.appname, dbtype: self.dbtype, data_key: GetData.settings.getdata_key}
 
       begin
-        result = RestClient.post("#{Capatross.settings.albatross_uri}/dumps/do",
+        result = RestClient.post("#{GetData.settings.albatross_uri}/dumps/do",
                                  request_options.to_json,
                                  :content_type => :json, :accept => :json)
       rescue StandardError => e
@@ -197,10 +199,10 @@ module Capatross
 
 
     def get_dumpinfo
-      request_options = {appname: self.appname, dbtype: self.dbtype, data_key: Capatross.settings.capatross_key}
+      request_options = {appname: self.appname, dbtype: self.dbtype, data_key: GetData.settings.getdata_key}
 
       begin
-        result = RestClient.post("#{Capatross.settings.albatross_uri}/dumps/dumpinfo",
+        result = RestClient.post("#{GetData.settings.albatross_uri}/dumps/dumpinfo",
                          request_options.to_json,
                          :content_type => :json, :accept => :json)
       rescue StandardError => e

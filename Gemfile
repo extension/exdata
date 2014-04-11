@@ -1,4 +1,4 @@
 source 'https://rubygems.org'
 
-# Specify your gem's dependencies in capatross.gemspec
+# Specify your gem's dependencies in getdata.gemspec
 gemspec
