@@ -43,7 +43,7 @@ module GetData
 
     def files
       if(@files.nil? or @files.empty?)
-        @files = ["#{File.join(File.dirname(__FILE__), "defaults.toml").to_s}",File.expand_path("~/getdata.toml")]
+        @files = ["#{File.join(File.dirname(__FILE__), "defaults.toml").to_s}",File.expand_path("~/exdata.toml")]
       end
       @files
     end
