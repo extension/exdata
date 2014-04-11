@@ -2,7 +2,6 @@
 # Copyright (c) 2012 North Carolina State University
 # === LICENSE:
 # see LICENSE file
-require 'rugged'
 require 'rest-client'
 
 require 'getdata/version'
