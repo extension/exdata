@@ -9,11 +9,11 @@ Gem::Specification.new do |gem|
     eXtension production data for use in development
   EOF
   gem.summary       = %q{Post logs from a capistrano deploy to the deployment server, as well as a custom deploy-tracking application.}
-  gem.homepage      = %q{https://github.com/extension/getdata}
+  gem.homepage      = %q{https://github.com/extension/exdata}
   gem.files         = `git ls-files`.split($\)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
-  gem.name          = "getdata"
+  gem.name          = "exdata"
   gem.require_paths = ["lib"]
   gem.version       = GetData::VERSION
   gem.add_dependency('highline', '>= 1.6.20')
