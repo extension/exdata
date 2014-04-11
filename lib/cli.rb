@@ -19,7 +19,7 @@ module GetData
 
       def getdata_key_check
         if(!GetData.has_getdata_key?)
-          puts "Please go to https://engineering.extension.org to obtain your getdata key and run 'getdata setup'"
+          puts "Please go to https://engineering.extension.org to obtain your data key and run 'exdata setup'"
           exit(1)
         end
       end
@@ -32,18 +32,18 @@ module GetData
 
       def check_database_name_for(appname)
         if(GetData.settings.dbsettings.nil?)
-          puts "Please set dbsettings in your getdata settings"
+          puts "Please set dbsettings in your exdata settings"
           exit(1)
         end
 
         if(GetData.settings.applications.nil?)
-          puts "Please set applications['#{appname}'] in your getdata settings"
+          puts "Please set applications['#{appname}'] in your exdata settings"
           exit(1)
         end
 
         dbname = GetData.settings.applications.send(appname)
         if(dbname.nil?)
-          puts "No databased specified in your getdata settings for #{appname}"
+          puts "No databased specified in your exdata settings for #{appname}"
           exit(1)
         end
 
@@ -52,8 +52,8 @@ module GetData
 
     end
 
-    desc "setup", "Setup getdata on this host"
-    method_option :force, :aliases => '-f', :type => :boolean, :default => false, :desc => "Force an overwrite of any existing getdata settings"
+    desc "setup", "Setup exdata on this host"
+    method_option :force, :aliases => '-f', :type => :boolean, :default => false, :desc => "Force an overwrite of any existing exdata settings"
     def setup
       # check for a ~/.capatross.yml and write a toml file from those settings
       if (File.exists?(File.expand_path("~/.capatross.yml")) and !File.exists?(File.expand_path("~/exdata.toml")))
@@ -87,7 +87,7 @@ module GetData
     end
 
 
-    desc "about", "about getdata"
+    desc "about", "about exdata"
     def about
       puts "eXData Version #{GetData::VERSION}: Utility to download data snapshots and import them locally for development"
     end
@@ -208,7 +208,7 @@ module GetData
       end
 
       if(!File.exists?(getdata.localfile))
-        say "The specified data import file: #{getdata.localfile} does not exist. Run getdata getdata or getdata downloaddata to download the file"
+        say "The specified data import file: #{getdata.localfile} does not exist. Run exdata fetch or exdata pull to download the file"
         exit(1)
       end
 
