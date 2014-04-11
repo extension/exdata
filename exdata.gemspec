@@ -16,6 +16,7 @@ Gem::Specification.new do |gem|
   gem.name          = "getdata"
   gem.require_paths = ["lib"]
   gem.version       = GetData::VERSION
+  gem.add_dependency('highline', '>= 1.6.20')
   gem.add_dependency('net-ssh', '>= 2.8.0')
   gem.add_dependency('net-scp', '>= 1.1.2')
   gem.add_dependency('rest-client', '>= 1.6.7')
