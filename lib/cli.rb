@@ -50,6 +50,18 @@ module GetData
         dbname
       end
 
+      def check_for_local_appname
+        appname_file = "./APPNAME"
+        if File.exists?(appname_file)
+          appname = IO.read(appname_file).strip
+        end
+        appname
+      end
+
+
+
+
+
     end
 
     desc "setup", "Setup exdata on this host"
@@ -140,7 +152,9 @@ module GetData
 
       # get the file details
       if(appname == 'prompt')
-        appname = ask("What application?", limited_to: application_list)
+        if(!(appname = check_for_local_appname))
+          appname = ask("What application?", limited_to: application_list)
+        end
       elsif(!application_list.include?(appname))
         say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
@@ -191,7 +205,9 @@ module GetData
 
       # get the file details
       if(appname == 'prompt')
-        appname = ask("What application?", limited_to: application_list)
+        if(!(appname = check_for_local_appname))
+          appname = ask("What application?", limited_to: application_list)
+        end
       elsif(!application_list.include?(appname))
         say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
@@ -225,6 +241,10 @@ module GetData
     desc "showsettings", "Show settings"
     def showsettings
       require 'pp'
+      if(appname = check_for_local_appname)
+        puts "Local appname: #{appname}"
+      end
+      puts "Settings:"
       pp GetData.settings.to_hash
     end
 
@@ -239,7 +259,9 @@ module GetData
 
       # get the file details
       if(appname == 'prompt')
-        appname = ask("What application?", limited_to: application_list)
+        if(!(appname = check_for_local_appname))
+          appname = ask("What application?", limited_to: application_list)
+        end
       elsif(!application_list.include?(appname))
         say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
@@ -275,7 +297,9 @@ module GetData
 
       # get the file details
       if(appname == 'prompt')
-        appname = ask("What application?", limited_to: application_list)
+        if(!(appname = check_for_local_appname))
+          appname = ask("What application?", limited_to: application_list)
+        end
       elsif(!application_list.include?(appname))
         say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
@@ -300,7 +324,9 @@ module GetData
 
       # get the file details
       if(appname == 'prompt')
-        appname = ask("What application?", limited_to: application_list)
+        if(!(appname = check_for_local_appname))
+          appname = ask("What application?", limited_to: application_list)
+        end
       elsif(!application_list.include?(appname))
         say("#{appname} is not a configured application. Configured applications are: #{application_list.join(', ')}")
         appname = ask("What application?", limited_to: application_list)
