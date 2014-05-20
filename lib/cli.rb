@@ -309,7 +309,7 @@ module GetData
       result = getdata.post_a_dump_request
 
       if(!result['success'])
-        puts "Unable to request a #{options[:dbtype]} database dump for #{application}. Reason #{result['message'] || 'unknown'}"
+        puts "Unable to request a #{options[:dbtype]} database dump for #{appname}. Reason #{result['message'] || 'unknown'}"
       else
         puts "#{result['message'] || 'Unknown result'}"
       end
