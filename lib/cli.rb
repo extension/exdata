@@ -252,7 +252,7 @@ module GetData
     desc "dumpinfo", "Get information about a database dump for an application"
     method_option :appname, :default => 'prompt', :aliases => ["-a","--application"], :desc => "Application name"
     method_option :dbtype,:default => 'production', :aliases => "-t", :desc => "Database type you want information about"
-    def info
+    def dumpinfo
       getdata_key_check
       application_list = GetData::Core.known_applications
       appname = options[:appname].downcase
