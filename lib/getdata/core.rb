@@ -116,7 +116,7 @@ module GetData
           print "#{self.percentify(sent/total.to_f)} #{self.humanize_bytes(sent)} of #{self.humanize_bytes(total)}" if print_progress
         end
         puts " ...done!" if print_progress
-      end      
+      end
     end
 
     def database_name
@@ -128,7 +128,7 @@ module GetData
         @dbsettings = {}
         GetData.settings.dbsettings.to_hash.each do |key,value|
           @dbsettings[key.to_s] = value
-        end        
+        end
 
         # bail if no database name
         if(!self.database_name)
@@ -138,6 +138,23 @@ module GetData
       end
       @dbsettings
     end
+
+    def check_for_db_connection
+      connection_settings = {}
+      self.dbsettings.each do |key,value|
+        if(key != 'database')
+          connection_settings[key.to_sym] = value
+        end
+      end
+      begin
+        client = Mysql2::Client.new(connection_settings)
+        result = client.query("SHOW TABLES FROM #{dbsettings['database']}")
+      rescue
+        raise GetDataError, "Unable to connect to the database #{dbsettings['database']}"
+      end
+      return result.count
+    end
+
 
     def drop_tables_for_database
       connection_settings = {}
@@ -242,7 +259,7 @@ module GetData
         iter = false   # Tell the thread to exit, cleaning up after itself…
         spinner.join   # …and wait for it to do so.
       }                # Use the block's return value as the method's
-    end    
+    end
 
   end
 

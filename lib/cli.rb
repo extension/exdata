@@ -58,6 +58,15 @@ module GetData
         appname
       end
 
+      def check_database_connection(getdata)
+        begin
+          getdata.check_for_db_connection
+        rescue GetDataError
+          puts "Unable to connect to database. Please verify that you are running MySQL."
+          exit(1)
+        end
+      end
+
 
 
 
@@ -175,6 +184,9 @@ module GetData
         exit(1)
       end
 
+      # check for database connection
+      check_database_connection(getdata)
+
       say "Data dump for #{appname} Size: #{getdata.humanize_size} Last dumped at: #{getdata.last_dumped}"
       say "Starting download of #{getdata.remotefile} from #{getdata.remotehost}..."
       getdata.download_remotefile # outputs progress
@@ -216,6 +228,9 @@ module GetData
       # will exit if settings don't exist
       check_database_name_for(appname)
       getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype], localfile: options[:localfile]})
+
+      # check for database connection
+      check_database_connection(getdata)
 
       if(File.exists?(getdata.localfile_downloaded))
         # gunzip
@@ -333,7 +348,7 @@ module GetData
       end
 
       getdata = GetData::Core.new({appname: appname, dbtype: options[:dbtype]})
-      
+
       result = getdata.post_a_copy_request
 
       if(!result['success'])
