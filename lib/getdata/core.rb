@@ -39,14 +39,6 @@ module GetData
       return results.join('')
     end
 
-    def capture_stderr &block
-      real_stderr, $stderr = $stderr, StringIO.new
-      yield
-      $stderr.string
-    ensure
-      $stderr = real_stderr
-    end
-
     def dumpinfo
       if(!@dumpinfo)
         @dumpinfo = get_dumpinfo
