@@ -100,7 +100,7 @@ module GetData
     end
 
     def download_remotefile(print_progress = true)
-      Net::SSH.start(GetData.settings.host, GetData.settings.user, :port => 24) do |ssh|
+      Net::SSH.start(GetData.settings.host, GetData.settings.user, :port => GetData.settings.port) do |ssh|
         print "Downloaded " if print_progress
         ssh.scp.download!(remotefile,localfile_downloaded) do |ch, name, sent, total|
           print "\r" if print_progress

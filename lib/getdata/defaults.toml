@@ -1,4 +1,5 @@
 albatross_uri = "https://engineering.extension.org"
 host = "engineering.extension.org"
 user = "pacecar"
+port = 22
 mysqlbin = "/Applications/MAMP/Library/bin/mysql"
