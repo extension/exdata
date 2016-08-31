@@ -5,7 +5,7 @@ Gem::Specification.new do |gem|
   gem.authors       = ["Jason Adam Young"]
   gem.email         = ["jayoung@extension.org"]
   gem.description = <<-EOF
-    exdata isa gem utility to facilitate the retrieval of data snaphosts of 
+    exdata isa gem utility to facilitate the retrieval of data snaphosts of
     eXtension production data for use in development
   EOF
   gem.summary       = %q{Post logs from a capistrano deploy to the deployment server, as well as a custom deploy-tracking application.}
@@ -23,4 +23,6 @@ Gem::Specification.new do |gem|
   gem.add_dependency('toml', '~> 0.0.3')
   gem.add_dependency('mysql2', '~> 0.2')
   gem.add_dependency('thor', '>= 0.16.0')
+  gem.add_dependency('parslet', '= 1.6.2')
+
 end
