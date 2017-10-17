@@ -7,6 +7,7 @@ require 'rest-client'
 require 'mysql2'
 require 'open3'
 require 'net/ssh'
+require 'net/ssh/proxy/command'
 require 'net/scp'
 
 module GetData
@@ -100,12 +101,11 @@ module GetData
     end
 
     def download_remotefile(print_progress = true)
-      Net::SSH.start(GetData.settings.host, GetData.settings.user, :port => GetData.settings.port) do |ssh|
+      proxy = Net::SSH::Proxy::Command.new("ssh #{GetData.settings.proxy_host} -W %h:%p")
+      Net::SSH.start(GetData.settings.host, GetData.settings.user, :port => GetData.settings.port, :proxy => proxy) do |ssh|
         print "Downloaded " if print_progress
         ssh.scp.download!(remotefile,localfile_downloaded) do |ch, name, sent, total|
-          print "\r" if print_progress
-          print "Downloaded " if print_progress
-          print "#{self.percentify(sent/total.to_f)} #{self.humanize_bytes(sent)} of #{self.humanize_bytes(total)}" if print_progress
+          print "\r Downloaded #{self.percentify(sent/total.to_f)} #{self.humanize_bytes(sent)} of #{self.humanize_bytes(total)}" if print_progress
         end
         puts " ...done!" if print_progress
       end
