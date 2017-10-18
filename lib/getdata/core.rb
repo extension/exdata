@@ -101,7 +101,7 @@ module GetData
     end
 
     def download_remotefile(print_progress = true)
-      proxy = Net::SSH::Proxy::Command.new("ssh #{GetData.settings.proxy_host} -W %h:%p")
+      proxy = Net::SSH::Proxy::Command.new("ssh #{GetData.settings.user}@#{GetData.settings.proxy_host} -W %h:%p")
       Net::SSH.start(GetData.settings.host, GetData.settings.user, :port => GetData.settings.port, :proxy => proxy) do |ssh|
         print "Downloaded " if print_progress
         ssh.scp.download!(remotefile,localfile_downloaded) do |ch, name, sent, total|
